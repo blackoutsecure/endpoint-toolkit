@@ -62,5 +62,6 @@ shellcheck services/workiq/bash/bootstrap-tenant.sh
 The [tests](tests/bootstrap.test.mjs) intercept every Azure CLI call with a Bash
 function and use private temporary fixtures. They cover creation, repeat-run
 convergence, tenant-wide versus user consent, scope preservation, previews,
-tenant mismatches, ambiguous IDs, and failure propagation. They do not authenticate
-or make network requests, and are not a live tenant integration gate.
+tenant mismatches, CRLF Azure CLI output, ambiguous IDs, and failure propagation.
+They do not authenticate or make network requests, and are not a live tenant
+integration gate.

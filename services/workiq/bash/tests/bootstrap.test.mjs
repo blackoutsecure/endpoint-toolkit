@@ -14,7 +14,7 @@ const vscode = '00000000-0000-4000-8000-000000000003';
 const scopes = 'WorkIQ.Read WorkIQ.Act WorkIQSettings.Read.All WorkIQSettings.ReadWrite.All WorkIQAgent.Ask.Selected WorkIQAgent.Ask';
 
 const mocks = `
-az() {
+az_fixture() {
   printf '%s\\n' "$*" >> calls
   case "$*" in
     'account show '*)
@@ -100,6 +100,13 @@ az() {
     *) printf 'Unexpected Azure CLI call: %s\\n' "$*" >&2; return 46 ;;
   esac
 }
+az() {
+  if [[ "\${MOCK_CRLF:-false}" == true ]]; then
+    az_fixture "$@" | awk '{ printf "%s\\r\\n", $0 }'
+  else
+    az_fixture "$@"
+  fi
+}
 `;
 
 async function fixture(action) {
@@ -147,6 +154,41 @@ test('Work IQ creates service principals and tenant-wide consent, then converges
     assert.equal(second.status, 0, second.stderr);
     assert.equal(second.mutations, '');
     assert.match(second.stderr, /already contains all required scopes/);
+  });
+});
+
+test('Work IQ handles CRLF tenant login and created object IDs', async () => {
+  await fixture(async (run, directory) => {
+    const environment = {
+      MOCK_CRLF: 'true', MOCK_MISSING_SPS: 'true',
+      MOCK_CURRENT_TENANT: '00000000-0000-4000-8000-000000000099'
+    };
+    const first = await run(['--apply', tenant], environment);
+    assert.equal(first.status, 0, first.stderr);
+    assert.match(first.mutations, /^LOGIN\nCREATE_SP workiq\nCREATE_SP vscode\nPOST /);
+    assert.deepEqual(JSON.parse(await readFile(join(directory, 'request.json'), 'utf8')), {
+      clientId: vscode, consentType: 'AllPrincipals', principalId: null, resourceId: workiq, scope: scopes
+    });
+    const second = await run(['--apply', tenant], environment);
+    assert.equal(second.status, 0, second.stderr);
+    assert.equal(second.mutations, '');
+  });
+});
+
+test('Work IQ previews and updates existing grants with CRLF Azure CLI output', async () => {
+  await fixture(async (run, directory) => {
+    const environment = { MOCK_CRLF: 'true', MOCK_GRANT: 'true', MOCK_EXISTING_SCOPES: 'Extra.Scope' };
+    const preview = await run(['--dry-run', tenant], environment);
+    assert.equal(preview.status, 0, preview.stderr);
+    assert.equal(preview.mutations, '');
+    assert.match(preview.stderr, /Would update/);
+    const apply = await run(['--apply', tenant], environment);
+    assert.equal(apply.status, 0, apply.stderr);
+    assert.match(apply.mutations, /^PATCH https:\/\/graph.microsoft.com\/v1.0\/oauth2PermissionGrants\/tenant-grant\n$/);
+    assert.deepEqual(JSON.parse(await readFile(join(directory, 'request.json'), 'utf8')), {
+      scope: `Extra.Scope ${scopes}`
+    });
+    assert.doesNotMatch(apply.calls, /\r/);
   });
 });
 
@@ -238,7 +280,7 @@ test('Work IQ reports an unreadable account and only recovers with an explicit a
 test('Work IQ rejects ambiguous grant IDs instead of choosing the first', async () => {
   await fixture(async run => {
     const result = await run(['--apply', tenant], {
-      MOCK_GRANT: 'true', MOCK_GRANT_IDS: 'tenant-grant\nanother-grant'
+      MOCK_CRLF: 'true', MOCK_GRANT: 'true', MOCK_GRANT_IDS: 'tenant-grant\nanother-grant'
     });
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /ambiguous response/);

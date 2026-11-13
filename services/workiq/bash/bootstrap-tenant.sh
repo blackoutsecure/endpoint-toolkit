@@ -20,13 +20,17 @@ USAGE
 fail() { printf 'ERROR: %s\n' "$1" >&2; exit 1; }
 log() { printf '%s\n' "$1" >&2; }
 
+az_tsv() {
+  az "$@" --output tsv | awk '{ sub(/\r$/, ""); print }'
+}
+
 normalize_scopes() {
   printf '%s\n' "$1" | tr '[:space:]' '\n' | awk 'NF && !seen[$0]++' | paste -sd ' ' -
 }
 
 ensure_login() {
   local current_tenant
-  if ! current_tenant="$(az account show --query tenantId --output tsv)"; then
+  if ! current_tenant="$(az_tsv account show --query tenantId)"; then
     log 'Could not read the active Azure CLI account.'
     current_tenant=''
   fi
@@ -37,7 +41,7 @@ ensure_login() {
     fi
     log "Signing in to tenant $TENANT_ID..."
     az login --tenant "$TENANT_ID" --allow-no-subscriptions --output none
-    current_tenant="$(az account show --query tenantId --output tsv)"
+    current_tenant="$(az_tsv account show --query tenantId)"
     current_tenant="$(printf '%s' "$current_tenant" | tr '[:upper:]' '[:lower:]')"
   fi
   [[ "$current_tenant" == "$TENANT_ID" ]] || fail 'Azure CLI did not select the requested tenant; no directory changes were attempted.'
@@ -45,14 +49,14 @@ ensure_login() {
 
 ensure_sp() {
   local app_id="$1" label="$2" sp_id
-  sp_id="$(az ad sp list --filter "appId eq '$app_id'" --query '[].id' --output tsv)" || return
+  sp_id="$(az_tsv ad sp list --filter "appId eq '$app_id'" --query '[].id')" || return
   if [[ -z "$sp_id" ]]; then
     if [[ "$DRY_RUN" == true ]]; then
       log "Would create the service principal for $label ($app_id)."
       return 0
     fi
     log "Creating the service principal for $label ($app_id)..."
-    sp_id="$(az ad sp create --id "$app_id" --query id --output tsv)" || return
+    sp_id="$(az_tsv ad sp create --id "$app_id" --query id)" || return
   else
     log "Service principal already exists for $label: $sp_id"
   fi
@@ -92,9 +96,9 @@ if [[ -z "$WORKIQ_SP_ID" || -z "$VSCODE_SP_ID" ]]; then
   log 'Would create the tenant-wide delegated grant after the missing service principals exist; grant lookup is deferred.'
 else
   log 'Checking tenant-wide delegated consent (VS Code -> Work IQ)...'
-  GRANT_ID="$(az rest --method GET \
+  GRANT_ID="$(az_tsv rest --method GET \
     --url "$GRAPH_URL/oauth2PermissionGrants?\$filter=clientId%20eq%20'$VSCODE_SP_ID'%20and%20resourceId%20eq%20'$WORKIQ_SP_ID'%20and%20consentType%20eq%20'AllPrincipals'" \
-    --query 'value[].id' --output tsv)"
+    --query 'value[].id')"
   if [[ -z "$GRANT_ID" ]]; then
     if [[ "$DRY_RUN" == true ]]; then
       log "Would create a tenant-wide delegated grant with scopes: $DESIRED_SCOPES"
@@ -107,7 +111,7 @@ else
     fi
   else
     [[ "$GRANT_ID" =~ ^[a-zA-Z0-9._~=-]+$ ]] || fail 'Expected one valid tenant-wide delegated grant ID; refusing an ambiguous response.'
-    EXISTING_SCOPES="$(az rest --method GET --url "$GRAPH_URL/oauth2PermissionGrants/$GRANT_ID" --query scope --output tsv)"
+    EXISTING_SCOPES="$(az_tsv rest --method GET --url "$GRAPH_URL/oauth2PermissionGrants/$GRANT_ID" --query scope)"
     EXISTING_SCOPES="$(normalize_scopes "$EXISTING_SCOPES")"
     MERGED_SCOPES="$(normalize_scopes "$EXISTING_SCOPES $DESIRED_SCOPES")"
     if [[ "$MERGED_SCOPES" == "$EXISTING_SCOPES" ]]; then
