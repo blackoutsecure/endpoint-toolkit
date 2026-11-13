@@ -49,6 +49,12 @@ Follow the service's [disposable native gate](services/ghostbsd-remote-access/RE
 before deployment; shell mocks on Linux/macOS/Windows do not certify GhostBSD
 or a hypervisor.
 
+Work IQ bootstrap tests also run through `npm test`, or independently with
+`node --test tools/tests/workiq.test.mjs`. They mock every Azure CLI call and
+never authenticate, create enterprise applications, or grant actual consent.
+Follow the [disposable tenant gate](services/workiq/README.md#validation) before
+administrative rollout; do not test apply against a configured production tenant.
+
 Windows, in separate noninteractive PowerShell processes:
 
 ```powershell

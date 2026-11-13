@@ -18,6 +18,7 @@ it does not replace native privilege boundaries or require a Rust runtime.
 | --- | --- | --- |
 | [Devbox](services/devbox/README.md) | Disk-image-backed development workspaces, mounting, and backups | [Windows](services/devbox/windows/README.md), [macOS](services/devbox/macos/README.md) |
 | [GhostBSD Remote Access](services/ghostbsd-remote-access/README.md) | MATE/XRDP guest setup, SSH onboarding, VM checks, and tunneled desktop access | [GhostBSD guest](services/ghostbsd-remote-access/ghostbsd/README.md), [Windows operator](services/ghostbsd-remote-access/windows/README.md) |
+| [Work IQ tenant bootstrap](services/workiq/README.md) | Service principals and tenant-wide VS Code delegated consent for Work IQ | [Bash CLI](services/workiq/bash/README.md) |
 
 Linux is a future backend, not an implemented or certified Devbox platform.
 Portable policy tests run on Ubuntu; that does not imply Linux storage support.
@@ -44,6 +45,9 @@ services/
     config/                  Build-time defaults and schema
     ghostbsd/                Guest Bash backend and portable contracts
     windows/                 PowerShell operator and safe mocks
+  workiq/
+    README.md                Tenant consent contract and safety
+    bash/                    Standalone administrator script and mocked tests
 tools/                       Repository-only build, packaging, and validation
 output/                      Generated, ignored deployment artifacts
 Cargo.toml Cargo.lock        Shared Rust workspace and locked dependencies
@@ -80,6 +84,10 @@ Deploy the generated scripts under `output/devbox/windows/` or
 `output/devbox/macos/`, not the authoring templates under `services/`.
 Do not deploy a checkout or depend on adjacent repository files.
 
+The [Work IQ tenant bootstrap](services/workiq/bash/README.md) is already a
+standalone script, not a generated backend. Run or copy it directly; tenant
+changes require an explicit tenant UUID and `--apply`.
+
 An optional partial deployment profile can set defaults for a new installation:
 
 ```text
@@ -97,6 +105,7 @@ platform entry point; rebuilding alone is not a policy override.
 - [macOS CLI and managed PKG deployment](services/devbox/macos/README.md)
 - [Framework standards and extension boundaries](framework/README.md)
 - [GhostBSD guest setup and Windows remote-access operator](services/ghostbsd-remote-access/README.md)
+- [Work IQ tenant-wide VS Code consent](services/workiq/README.md)
 - [Contributing and validation](CONTRIBUTING.md)
 
 For macOS fleets, the build stages a PKG payload with a user-session initialization
@@ -107,7 +116,7 @@ user-facing need.
 ## Rust CLI
 
 The [Rust framework](framework/README.md#rust-framework) resolves the same
-authored defaults/schemas for both services and produces read-only native
+authored defaults/schemas for Devbox and GhostBSD Remote Access and produces read-only native
 adapter plans. It does not install packages, elevate, run SSH, or execute the
 listed native operations. There is no Rust `apply` command.
 
